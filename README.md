@@ -1,4 +1,4 @@
-# BrideOps
+# Bride-a-do
 
 Steps to get this live on Vercel with Supabase storage are in the chat —
 this file is just a quick reference.

@@ -137,7 +137,7 @@ async function loadData(userId) {
   if (!supabase || !userId) return null;
   try {
     const { data, error } = await supabase
-      .from("brideops_data")
+      .from("bride_a_do_data")
       .select("data")
       .eq("id", userId)
       .maybeSingle();
@@ -152,7 +152,7 @@ async function saveData(userId, data) {
   if (!supabase || !userId) return;
   try {
     await supabase
-      .from("brideops_data")
+      .from("bride_a_do_data")
       .upsert({ id: userId, data, updated_at: new Date().toISOString() });
   } catch {
     /* ignore — local state still works, it just won't persist */

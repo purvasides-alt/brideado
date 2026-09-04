@@ -1096,6 +1096,73 @@ function PurchaseFields({ form, setForm, category, eventsList = [] }) {
   );
 }
 
+/* ---------------------------------------------------------------- */
+/* Money <-> Bride-a-do auto-complete matching                       */
+/* ---------------------------------------------------------------- */
+const MATCH_STOPWORDS = new Set([
+  "the", "a", "an", "for", "and", "of", "to", "with", "in", "on", "at", "from", "by", "is", "are",
+  "book", "booking", "booked", "finalise", "finalize", "finalised", "finalized", "confirm", "confirmed",
+  "pay", "paid", "payment", "purchase", "purchased", "get", "got", "choose", "chosen", "select", "selected",
+  "pick", "picked", "do", "done", "buy", "bought", "arrange", "arranged", "hire", "hired", "sort", "sorted", "our",
+  "final", "last", "first",
+]);
+
+function singularize(w) {
+  if (w.length > 3 && w.endsWith("ies")) return w.slice(0, -3) + "y";
+  if (w.length > 3 && w.endsWith("es")) return w.slice(0, -2);
+  if (w.length > 3 && w.endsWith("s") && !w.endsWith("ss")) return w.slice(0, -1);
+  return w;
+}
+
+function tokenize(str) {
+  return (str || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .map(singularize)
+    .filter((w) => w.length > 1 && !MATCH_STOPWORDS.has(w));
+}
+
+const ADO_MATCH_THRESHOLD = 0.5;
+
+// How much of the a-do's meaningful wording shows up in the purchase's category/item/store.
+function adoMatchScore(adoTitle, purchaseTokens) {
+  const taskTokens = tokenize(adoTitle);
+  if (taskTokens.length === 0 || purchaseTokens.length === 0) return 0;
+  const purchaseSet = new Set(purchaseTokens);
+  const overlap = taskTokens.filter((t) => purchaseSet.has(t)).length;
+  return overlap / taskTokens.length;
+}
+
+// Finds the single pending a-do a purchase should tick off, or null if there's no
+// confident, unambiguous match.
+function findMatchingAdo(pendingAdos, category, item, store) {
+  const purchaseTokens = tokenize(`${category} ${item} ${store}`);
+  if (purchaseTokens.length === 0 || pendingAdos.length === 0) return null;
+  const scored = pendingAdos
+    .map((t) => ({ task: t, score: adoMatchScore(t.title, purchaseTokens) }))
+    .filter((s) => s.score >= ADO_MATCH_THRESHOLD)
+    .sort((a, b) => b.score - a.score);
+  if (scored.length === 0) return null;
+  if (scored.length > 1 && scored[0].score === scored[1].score) return null; // ambiguous — leave it alone
+  return scored[0].task;
+}
+
+// Given a purchase's event/category/item/store, auto-ticks the matching pending
+// a-do for that event (if any single one clearly matches) and returns the
+// (possibly unchanged) eventChecklists map.
+function autoCompleteMatchingAdo(eventChecklists, event, category, item, store) {
+  if (!event) return eventChecklists;
+  const list = eventChecklists?.[event] || [];
+  const pending = list.filter((t) => !t.done);
+  const match = findMatchingAdo(pending, category, item, store);
+  if (!match) return eventChecklists;
+  return {
+    ...eventChecklists,
+    [event]: list.map((t) => (t.id === match.id ? { ...t, done: true } : t)),
+  };
+}
+
 function Money({ data, setData }) {
   const [formMode, setFormMode] = useState(null); // null | "plan" | "log"
   const [showBudgetForm, setShowBudgetForm] = useState(false);
@@ -1148,6 +1215,7 @@ function Money({ data, setData }) {
         givenForAlteration: isOutfit ? logForm.givenForAlteration : false,
         expected: 0, status: "purchased", date: new Date().toISOString(), attachments: [],
       }],
+      eventChecklists: autoCompleteMatchingAdo(d.eventChecklists, logForm.event, logForm.category, logForm.item, logForm.store),
     }));
     setLogForm({ item: "", category: DEFAULT_CATEGORIES[0], store: "", event: "", billAmount: "", advancePaid: "", paidInFull: true, collectionDate: "", givenForAlteration: false });
     setFormMode(null);
@@ -1158,15 +1226,21 @@ function Money({ data, setData }) {
     const advance = convertForm.paidInFull ? bill : (Number(convertForm.advancePaid) || 0);
     const balance = convertForm.paidInFull ? 0 : Math.max(0, bill - advance);
     const isOutfit = category === "Outfits";
-    setData((d) => ({
-      ...d,
-      expenses: d.expenses.map((e) => e.id === id ? {
-        ...e, status: "purchased", actual: bill, advancePaid: advance,
-        balanceAmount: balance, collectionDate: convertForm.collectionDate,
-        event: convertForm.event,
-        givenForAlteration: isOutfit ? convertForm.givenForAlteration : false,
-      } : e),
-    }));
+    setData((d) => {
+      const target = d.expenses.find((e) => e.id === id);
+      return {
+        ...d,
+        expenses: d.expenses.map((e) => e.id === id ? {
+          ...e, status: "purchased", actual: bill, advancePaid: advance,
+          balanceAmount: balance, collectionDate: convertForm.collectionDate,
+          event: convertForm.event,
+          givenForAlteration: isOutfit ? convertForm.givenForAlteration : false,
+        } : e),
+        eventChecklists: target
+          ? autoCompleteMatchingAdo(d.eventChecklists, convertForm.event, category, target.item, target.store)
+          : d.eventChecklists,
+      };
+    });
     setConvertingId(null);
     setConvertForm({ billAmount: "", advancePaid: "", paidInFull: true, collectionDate: "", givenForAlteration: false, event: "" });
   };

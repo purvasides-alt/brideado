@@ -5,7 +5,7 @@ import {
   Sparkles, ArrowRight, Calendar, Wallet, MapPin, Heart, Archive,
   Check, Plus, X, ShoppingBag, Gem, Shirt, FileText, Dumbbell,
   Droplet, Scissors, ChevronRight, ChevronLeft, LayoutGrid, Trash2,
-  Loader2, CircleDot, Images, Pin,
+  Loader2, CircleDot, Images, Pin, PartyPopper,
 } from "lucide-react";
 
 /* ---------------------------------------------------------------- */
@@ -116,6 +116,8 @@ function emptyData(profile) {
     places: [],
     photos: { actual: [], inspo: [] },
     budgetByCategory: {},
+    budgetByEvent: {},
+    eventChecklists: {},
     beautyTasks: [
       { id: uid(), group: "Skin", title: "Book a starter facial", done: false },
       { id: uid(), group: "Hair", title: "Trial haircut + colour consult", done: false },
@@ -175,7 +177,7 @@ function Progress({ value, color = T.wine }) {
 
 const PIE_COLORS = [T.wine, T.butter, T.moss, "#B4453D", "#8C6A4E", "#6B7A5E", "#9B4F63", "#5B7B8C", "#C98A3E", "#4A4458", "#7A8B4F", "#5B5964", "#A9744F"];
 
-function CategoryPie({ expenses }) {
+function CategoryPie({ expenses, compact = false, emptyHint = "Log a purchase in Money and your spend breakdown will show up here." }) {
   const data = DEFAULT_CATEGORIES
     .map((c) => ({
       name: c,
@@ -187,24 +189,48 @@ function CategoryPie({ expenses }) {
   const total = data.reduce((s, c) => s + c.value, 0);
 
   if (data.length === 0) {
-    return <p className="text-sm" style={{ color: T.inkSoft }}>Log a purchase in Money and your spend breakdown will show up here.</p>;
+    if (compact) {
+      return (
+        <div className="flex items-center justify-center text-center" style={{ width: 96, height: 96 }}>
+          <span className="text-xs" style={{ color: T.inkSoft }}>No spends yet</span>
+        </div>
+      );
+    }
+    return <p className="text-sm" style={{ color: T.inkSoft }}>{emptyHint}</p>;
   }
 
-  return (
-    <div className="flex flex-col sm:flex-row items-center gap-6">
-      <div style={{ width: 160, height: 160 }} className="flex-shrink-0">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie data={data} dataKey="value" nameKey="name" innerRadius={48} outerRadius={72} paddingAngle={2} stroke="none">
-              {data.map((c, i) => <Cell key={c.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-            </Pie>
+  const size = compact ? 96 : 160;
+  const inner = compact ? 30 : 48;
+  const outer = compact ? 46 : 72;
+
+  const donut = (
+    <div style={{ width: size, height: size, position: "relative" }} className="flex-shrink-0">
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie data={data} dataKey="value" nameKey="name" innerRadius={inner} outerRadius={outer} paddingAngle={2} stroke="none">
+            {data.map((c, i) => <Cell key={c.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+          </Pie>
+          {!compact && (
             <RTooltip
               formatter={(value) => INR(value)}
               contentStyle={{ background: T.paper, border: `1px solid ${T.line}`, borderRadius: 8, fontSize: 12 }}
             />
-          </PieChart>
-        </ResponsiveContainer>
-      </div>
+          )}
+        </PieChart>
+      </ResponsiveContainer>
+      {compact && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <span className="text-[10px] font-medium text-center leading-tight px-1" style={{ color: T.ink }}>{INR(total)}</span>
+        </div>
+      )}
+    </div>
+  );
+
+  if (compact) return donut;
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center gap-6">
+      {donut}
       <div className="flex-1 w-full flex flex-col gap-1.5">
         {data.map((c, i) => (
           <div key={c.name} className="flex items-center justify-between text-xs">
@@ -708,6 +734,7 @@ function Onboarding({ onComplete }) {
 const NAV = [
   { key: "dashboard", label: "Dashboard", icon: LayoutGrid },
   { key: "timeline", label: "Timeline", icon: Calendar },
+  { key: "events", label: "Events", icon: PartyPopper },
   { key: "money", label: "Money", icon: Wallet },
   { key: "shopping", label: "Shopping", icon: MapPin },
   { key: "mybride", label: "My Bride", icon: Heart },
@@ -966,7 +993,7 @@ function Timeline({ data, setData }) {
 /* ---------------------------------------------------------------- */
 /* Money                                                              */
 /* ---------------------------------------------------------------- */
-function PurchaseFields({ form, setForm, category }) {
+function PurchaseFields({ form, setForm, category, eventsList = [] }) {
   const bill = Number(form.billAmount) || 0;
   const paidInFull = form.paidInFull !== false;
   const advance = paidInFull ? bill : (Number(form.advancePaid) || 0);
@@ -1024,39 +1051,43 @@ function PurchaseFields({ form, setForm, category }) {
           className="w-full px-3 py-2 rounded-lg border text-sm" style={{ borderColor: T.line }}
         />
       </div>
+      <div className="sm:col-span-2">
+        <label className="text-xs block mb-1" style={{ color: T.inkSoft }}>Event (optional)</label>
+        <select
+          value={form.event || ""}
+          onChange={(e) => setForm({ ...form, event: e.target.value })}
+          className="w-full px-3 py-2 rounded-lg border text-sm" style={{ borderColor: T.line }}
+        >
+          <option value="">No specific event</option>
+          {eventsList.map((ev) => <option key={ev} value={ev}>{ev}</option>)}
+        </select>
+      </div>
       {isOutfit && (
-        <div className="sm:col-span-2 grid sm:grid-cols-2 gap-3">
-          <input
-            placeholder="Event (e.g. Reception)" value={form.event || ""}
-            onChange={(e) => setForm({ ...form, event: e.target.value })}
-            className="px-3 py-2 rounded-lg border text-sm sm:col-span-2" style={{ borderColor: T.line }}
-          />
-          <div className="sm:col-span-2">
-            <label className="text-xs block mb-1" style={{ color: T.inkSoft }}>Given for alteration?</label>
-            <div className="flex gap-2">
-              <button
-                type="button" onClick={() => setForm({ ...form, givenForAlteration: true })}
-                className="flex-1 px-3 py-2 rounded-lg border text-sm"
-                style={{
-                  borderColor: form.givenForAlteration ? T.wine : T.line,
-                  background: form.givenForAlteration ? T.wine : "white",
-                  color: form.givenForAlteration ? "white" : T.ink,
-                }}
-              >
-                Yes
-              </button>
-              <button
-                type="button" onClick={() => setForm({ ...form, givenForAlteration: false })}
-                className="flex-1 px-3 py-2 rounded-lg border text-sm"
-                style={{
-                  borderColor: !form.givenForAlteration ? T.wine : T.line,
-                  background: !form.givenForAlteration ? T.wine : "white",
-                  color: !form.givenForAlteration ? "white" : T.ink,
-                }}
-              >
-                No
-              </button>
-            </div>
+        <div className="sm:col-span-2">
+          <label className="text-xs block mb-1" style={{ color: T.inkSoft }}>Given for alteration?</label>
+          <div className="flex gap-2">
+            <button
+              type="button" onClick={() => setForm({ ...form, givenForAlteration: true })}
+              className="flex-1 px-3 py-2 rounded-lg border text-sm"
+              style={{
+                borderColor: form.givenForAlteration ? T.wine : T.line,
+                background: form.givenForAlteration ? T.wine : "white",
+                color: form.givenForAlteration ? "white" : T.ink,
+              }}
+            >
+              Yes
+            </button>
+            <button
+              type="button" onClick={() => setForm({ ...form, givenForAlteration: false })}
+              className="flex-1 px-3 py-2 rounded-lg border text-sm"
+              style={{
+                borderColor: !form.givenForAlteration ? T.wine : T.line,
+                background: !form.givenForAlteration ? T.wine : "white",
+                color: !form.givenForAlteration ? "white" : T.ink,
+              }}
+            >
+              No
+            </button>
           </div>
         </div>
       )}
@@ -1067,7 +1098,8 @@ function PurchaseFields({ form, setForm, category }) {
 function Money({ data, setData }) {
   const [formMode, setFormMode] = useState(null); // null | "plan" | "log"
   const [showBudgetForm, setShowBudgetForm] = useState(false);
-  const [planForm, setPlanForm] = useState({ item: "", category: DEFAULT_CATEGORIES[0], store: "", expected: "" });
+  const [planForm, setPlanForm] = useState({ item: "", category: DEFAULT_CATEGORIES[0], store: "", expected: "", event: "" });
+  const eventsList = data.profile.events || [];
   const [logForm, setLogForm] = useState({
     item: "", category: DEFAULT_CATEGORIES[0], store: "", event: "",
     billAmount: "", advancePaid: "", paidInFull: true, collectionDate: "", givenForAlteration: false,
@@ -1095,7 +1127,7 @@ function Money({ data, setData }) {
       ...d,
       expenses: [...d.expenses, { id: uid(), ...planForm, expected: Number(planForm.expected) || 0, actual: 0, status: "planned", date: new Date().toISOString(), attachments: [] }],
     }));
-    setPlanForm({ item: "", category: DEFAULT_CATEGORIES[0], store: "", expected: "" });
+    setPlanForm({ item: "", category: DEFAULT_CATEGORIES[0], store: "", expected: "", event: "" });
     setFormMode(null);
   };
 
@@ -1111,7 +1143,7 @@ function Money({ data, setData }) {
         id: uid(), item: logForm.item, category: logForm.category, store: logForm.store,
         actual: bill, advancePaid: advance, balanceAmount: balance,
         collectionDate: logForm.collectionDate,
-        event: isOutfit ? logForm.event : "",
+        event: logForm.event,
         givenForAlteration: isOutfit ? logForm.givenForAlteration : false,
         expected: 0, status: "purchased", date: new Date().toISOString(), attachments: [],
       }],
@@ -1130,7 +1162,7 @@ function Money({ data, setData }) {
       expenses: d.expenses.map((e) => e.id === id ? {
         ...e, status: "purchased", actual: bill, advancePaid: advance,
         balanceAmount: balance, collectionDate: convertForm.collectionDate,
-        event: isOutfit ? convertForm.event : "",
+        event: convertForm.event,
         givenForAlteration: isOutfit ? convertForm.givenForAlteration : false,
       } : e),
     }));
@@ -1241,6 +1273,10 @@ function Money({ data, setData }) {
               </select>
               <input placeholder="Store / vendor" value={planForm.store} onChange={(e) => setPlanForm({ ...planForm, store: e.target.value })} className="px-3 py-2 rounded-lg border text-sm" style={{ borderColor: T.line }} />
               <input placeholder="Expected / quoted price" type="number" value={planForm.expected} onChange={(e) => setPlanForm({ ...planForm, expected: e.target.value })} className="px-3 py-2 rounded-lg border text-sm" style={{ borderColor: T.line }} />
+              <select value={planForm.event} onChange={(e) => setPlanForm({ ...planForm, event: e.target.value })} className="px-3 py-2 rounded-lg border text-sm" style={{ borderColor: T.line }}>
+                <option value="">No specific event</option>
+                {eventsList.map((ev) => <option key={ev} value={ev}>{ev}</option>)}
+              </select>
               <button onClick={addPlanned} className="px-3 py-2 rounded-lg text-sm text-white sm:col-span-2" style={{ background: T.wine }}>Save plan</button>
             </div>
           </div>
@@ -1255,7 +1291,7 @@ function Money({ data, setData }) {
                 {DEFAULT_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
               </select>
               <input placeholder="Store / vendor" value={logForm.store} onChange={(e) => setLogForm({ ...logForm, store: e.target.value })} className="px-3 py-2 rounded-lg border text-sm" style={{ borderColor: T.line }} />
-              <PurchaseFields form={logForm} setForm={setLogForm} category={logForm.category} />
+              <PurchaseFields form={logForm} setForm={setLogForm} category={logForm.category} eventsList={eventsList} />
               <button onClick={addLogged} className="px-3 py-2 rounded-lg text-sm text-white sm:col-span-2" style={{ background: T.wine }}>Save purchase</button>
             </div>
           </div>
@@ -1274,7 +1310,7 @@ function Money({ data, setData }) {
                         <IconBtn icon={X} onClick={() => setConvertingId(null)} label="Cancel" />
                       </div>
                       <div className="grid sm:grid-cols-2 gap-3">
-                        <PurchaseFields form={convertForm} setForm={setConvertForm} category={e.category} />
+                        <PurchaseFields form={convertForm} setForm={setConvertForm} category={e.category} eventsList={eventsList} />
                       </div>
                       <button
                         onClick={() => confirmPurchase(e.id, e.category)}
@@ -1316,7 +1352,7 @@ function Money({ data, setData }) {
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="text-sm truncate" style={{ color: T.ink }}>{e.item}</div>
-                  <div className="text-xs" style={{ color: T.inkSoft }}>{e.category}{e.store ? ` · ${e.store}` : ""}</div>
+                  <div className="text-xs" style={{ color: T.inkSoft }}>{e.category}{e.store ? ` · ${e.store}` : ""}{e.event ? ` · ${e.event}` : ""}</div>
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
                   <span className="text-sm" style={{ color: T.ink }}>{INR(e.actual)}</span>
@@ -1334,6 +1370,201 @@ function Money({ data, setData }) {
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- */
+/* Events                                                             */
+/* ---------------------------------------------------------------- */
+function EventCard({ data, eventName, onOpen }) {
+  const expenses = data.expenses.filter((e) => e.event === eventName);
+  const checklist = data.eventChecklists?.[eventName] || [];
+  const pending = checklist.filter((t) => !t.done);
+
+  return (
+    <button
+      onClick={onOpen}
+      className="rounded-2xl border p-5 text-left transition-shadow hover:shadow-sm"
+      style={{ borderColor: T.line, background: T.paper }}
+    >
+      <div className="flex items-center justify-between mb-4">
+        <span style={{ ...serif, color: T.ink }} className="text-lg truncate">{eventName}</span>
+        <ChevronRight size={16} style={{ color: T.inkSoft }} className="flex-shrink-0" />
+      </div>
+      <div className="flex items-center gap-4">
+        <CategoryPie expenses={expenses} compact />
+        <div className="flex-1 min-w-0">
+          <div className="text-xs tracking-wide mb-2" style={{ color: T.inkSoft }}>To be ticked-off</div>
+          {pending.length === 0 ? (
+            <p className="text-xs" style={{ color: T.inkSoft }}>Nothing pending — all done.</p>
+          ) : (
+            <div className="flex flex-col gap-1">
+              {pending.slice(0, 4).map((t) => (
+                <div key={t.id} className="text-xs truncate" style={{ color: T.ink }}>· {t.title}</div>
+              ))}
+              {pending.length > 4 && (
+                <div className="text-xs" style={{ color: T.inkSoft }}>+{pending.length - 4} more</div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function EventDetail({ data, setData, eventName, onBack }) {
+  const [addingTask, setAddingTask] = useState(false);
+  const [newTask, setNewTask] = useState("");
+
+  const checklist = data.eventChecklists?.[eventName] || [];
+  const pending = checklist.filter((t) => !t.done);
+  const done = checklist.filter((t) => t.done);
+  const expenses = data.expenses.filter((e) => e.event === eventName);
+  const spent = expenses.filter((e) => e.status === "purchased").reduce((s, e) => s + (Number(e.actual) || 0), 0);
+  const { paid, pending: pendingAmt } = spentBreakdown(expenses);
+  const budget = data.budgetByEvent?.[eventName] || 0;
+
+  const toggleTask = (id) => setData((d) => ({
+    ...d,
+    eventChecklists: {
+      ...d.eventChecklists,
+      [eventName]: (d.eventChecklists?.[eventName] || []).map((t) => t.id === id ? { ...t, done: !t.done } : t),
+    },
+  }));
+
+  const submitTask = () => {
+    const title = newTask.trim();
+    if (title) {
+      setData((d) => ({
+        ...d,
+        eventChecklists: {
+          ...d.eventChecklists,
+          [eventName]: [...(d.eventChecklists?.[eventName] || []), { id: uid(), title, done: false }],
+        },
+      }));
+    }
+    setNewTask("");
+    setAddingTask(false);
+  };
+
+  const setEventBudget = (val) => setData((d) => ({
+    ...d,
+    budgetByEvent: { ...d.budgetByEvent, [eventName]: Number(val) || 0 },
+  }));
+
+  return (
+    <div>
+      <div className="px-6 sm:px-10 pt-8 sm:pt-10 pb-2">
+        <button onClick={onBack} className="flex items-center gap-1 text-sm mb-4" style={{ color: T.inkSoft }}>
+          <ChevronLeft size={16} /> All events
+        </button>
+        <h1 style={{ ...serif, color: T.ink }} className="text-3xl mb-1">{eventName}</h1>
+      </div>
+
+      <div className="px-6 sm:px-10 pb-16 grid sm:grid-cols-2 gap-6">
+        <div className="rounded-2xl p-6 border" style={{ background: T.paper, borderColor: T.line }}>
+          <div className="text-xs tracking-wide mb-4" style={{ color: T.inkSoft }}>Bride-a-do</div>
+          <div className="flex flex-col gap-2 mb-4">
+            {pending.length === 0 && <p className="text-sm" style={{ color: T.inkSoft }}>Nothing left to do for this event.</p>}
+            {pending.map((t) => (
+              <button key={t.id} onClick={() => toggleTask(t.id)} className="flex items-center gap-2 text-left">
+                <span className="w-3.5 h-3.5 rounded-full border flex-shrink-0 flex items-center justify-center" style={{ borderColor: T.inkSoft, background: "transparent" }} />
+                <span className="text-sm" style={{ color: T.ink }}>{t.title}</span>
+              </button>
+            ))}
+          </div>
+          {addingTask ? (
+            <input
+              autoFocus
+              value={newTask}
+              onChange={(e) => setNewTask(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") submitTask();
+                if (e.key === "Escape") { setNewTask(""); setAddingTask(false); }
+              }}
+              onBlur={submitTask}
+              placeholder="New a-do"
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none focus:ring-2"
+              style={{ borderColor: T.wine }}
+            />
+          ) : (
+            <button onClick={() => setAddingTask(true)} className="flex items-center gap-1 text-sm" style={{ color: T.wine }}>
+              <Plus size={14} /> Add a-do
+            </button>
+          )}
+        </div>
+
+        <div className="rounded-2xl p-6 border" style={{ background: T.paper, borderColor: T.line }}>
+          <div className="text-xs tracking-wide mb-4" style={{ color: T.inkSoft }}>Bride-a-done</div>
+          {done.length === 0 && <p className="text-sm" style={{ color: T.inkSoft }}>Nothing ticked off yet.</p>}
+          <div className="flex flex-col gap-2">
+            {done.map((t) => (
+              <button key={t.id} onClick={() => toggleTask(t.id)} className="flex items-center gap-2 text-left">
+                <span className="w-3.5 h-3.5 rounded-full border flex-shrink-0 flex items-center justify-center" style={{ borderColor: T.moss, background: T.moss }}>
+                  <Check size={9} color="white" />
+                </span>
+                <span className="text-sm" style={{ color: T.inkSoft, textDecoration: "line-through" }}>{t.title}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl p-6 border sm:col-span-2" style={{ background: T.paper, borderColor: T.line }}>
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+            <div className="text-xs tracking-wide" style={{ color: T.inkSoft }}>Spends</div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs" style={{ color: T.inkSoft }}>Budget</span>
+              <div className="relative w-28">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: T.inkSoft }}>₹</span>
+                <input
+                  type="number"
+                  value={budget || ""}
+                  onChange={(e) => setEventBudget(e.target.value)}
+                  placeholder="0"
+                  className="w-full text-sm pl-6 pr-2 py-1.5 rounded-lg border outline-none text-right"
+                  style={{ borderColor: T.line }}
+                />
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-between text-sm mb-2">
+            <span style={{ color: T.ink }}>{INR(spent)}{budget > 0 ? ` / ${INR(budget)}` : ""}</span>
+            <span style={{ color: T.inkSoft }}>{pendingAmt > 0 ? `${INR(pendingAmt)} pending` : "spent"}</span>
+          </div>
+          <SpentBar paid={paid} pending={pendingAmt} budgetTotal={budget} />
+          <div className="mt-6">
+            <CategoryPie expenses={expenses} emptyHint="Tag a purchase in Money with this event to see its spend breakdown here." />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Events({ data, setData }) {
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const events = data.profile.events || [];
+
+  if (selectedEvent) {
+    return <EventDetail data={data} setData={setData} eventName={selectedEvent} onBack={() => setSelectedEvent(null)} />;
+  }
+
+  return (
+    <div>
+      <PageHeader title="Events" sub="Every event on your calendar, with its own checklist and spends." />
+      <div className="px-6 sm:px-10 pb-16">
+        {events.length === 0 ? (
+          <p className="text-sm" style={{ color: T.inkSoft }}>No events yet — the events you picked during onboarding will show up here.</p>
+        ) : (
+          <div className="grid sm:grid-cols-2 gap-4">
+            {events.map((ev) => (
+              <EventCard key={ev} data={data} eventName={ev} onOpen={() => setSelectedEvent(ev)} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1808,6 +2039,7 @@ export default function App() {
     <Shell view={view} setView={setView} name={data.profile.name} daysToGo={daysToGo} onSignOut={handleSignOut}>
       {view === "dashboard" && <Dashboard data={data} setData={setData} daysToGo={daysToGo} />}
       {view === "timeline" && <Timeline data={data} setData={setData} />}
+      {view === "events" && <Events data={data} setData={setData} />}
       {view === "money" && <Money data={data} setData={setData} />}
       {view === "shopping" && <Shopping data={data} setData={setData} />}
       {view === "mybride" && <MyBride data={data} setData={setData} />}

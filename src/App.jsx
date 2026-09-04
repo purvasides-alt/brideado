@@ -118,6 +118,7 @@ function emptyData(profile) {
     budgetByCategory: {},
     budgetByEvent: {},
     eventChecklists: {},
+    eventDates: {},
     beautyTasks: [
       { id: uid(), group: "Skin", title: "Book a starter facial", done: false },
       { id: uid(), group: "Hair", title: "Trial haircut + colour consult", done: false },
@@ -1382,6 +1383,7 @@ function EventCard({ data, eventName, onOpen }) {
   const expenses = data.expenses.filter((e) => e.event === eventName);
   const checklist = data.eventChecklists?.[eventName] || [];
   const pending = checklist.filter((t) => !t.done);
+  const eventDate = data.eventDates?.[eventName];
 
   return (
     <button
@@ -1390,7 +1392,10 @@ function EventCard({ data, eventName, onOpen }) {
       style={{ borderColor: T.line, background: T.paper }}
     >
       <div className="flex items-center justify-between mb-4">
-        <span style={{ ...serif, color: T.ink }} className="text-lg truncate">{eventName}</span>
+        <div className="min-w-0">
+          <span style={{ ...serif, color: T.ink }} className="text-lg truncate block">{eventName}</span>
+          {eventDate && <span className="text-xs" style={{ color: T.inkSoft }}>{fmtDate(new Date(eventDate))}</span>}
+        </div>
         <ChevronRight size={16} style={{ color: T.inkSoft }} className="flex-shrink-0" />
       </div>
       <div className="flex items-center gap-4">
@@ -1426,6 +1431,7 @@ function EventDetail({ data, setData, eventName, onBack }) {
   const spent = expenses.filter((e) => e.status === "purchased").reduce((s, e) => s + (Number(e.actual) || 0), 0);
   const { paid, pending: pendingAmt } = spentBreakdown(expenses);
   const budget = data.budgetByEvent?.[eventName] || 0;
+  const eventDate = data.eventDates?.[eventName];
 
   const toggleTask = (id) => setData((d) => ({
     ...d,
@@ -1462,6 +1468,7 @@ function EventDetail({ data, setData, eventName, onBack }) {
           <ChevronLeft size={16} /> All events
         </button>
         <h1 style={{ ...serif, color: T.ink }} className="text-3xl mb-1">{eventName}</h1>
+        {eventDate && <p className="text-sm" style={{ color: T.inkSoft }}>{fmtDate(new Date(eventDate))}</p>}
       </div>
 
       <div className="px-6 sm:px-10 pb-16 grid sm:grid-cols-2 gap-6">
@@ -1544,22 +1551,110 @@ function EventDetail({ data, setData, eventName, onBack }) {
   );
 }
 
+function AddEventForm({ onSave, onCancel }) {
+  const [name, setName] = useState("");
+  const [date, setDate] = useState("");
+
+  const save = () => {
+    if (!name.trim()) return;
+    onSave(name.trim(), date);
+  };
+
+  return (
+    <div className="rounded-2xl border p-5" style={{ borderColor: T.line, background: T.paper }}>
+      <p className="text-xs mb-3" style={{ color: T.inkSoft }}>Missed one during onboarding? Add it here.</p>
+      <div className="grid sm:grid-cols-2 gap-3">
+        <input
+          autoFocus
+          placeholder="Event name (e.g. Cocktail party)"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") save(); }}
+          className="px-3 py-2 rounded-lg border text-sm sm:col-span-2" style={{ borderColor: T.line }}
+        />
+        <div>
+          <label className="text-xs block mb-1" style={{ color: T.inkSoft }}>Date (optional)</label>
+          <input
+            type="date" value={date} onChange={(e) => setDate(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg border text-sm" style={{ borderColor: T.line }}
+          />
+        </div>
+      </div>
+      <div className="flex items-center gap-2 mt-4">
+        <button onClick={save} disabled={!name.trim()} className="px-4 py-2 rounded-full text-sm text-white disabled:opacity-30" style={{ background: T.wine }}>
+          Save event
+        </button>
+        <button onClick={onCancel} className="px-4 py-2 rounded-full text-sm" style={{ color: T.inkSoft }}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function Events({ data, setData }) {
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [showAddForm, setShowAddForm] = useState(false);
   const events = data.profile.events || [];
 
   if (selectedEvent) {
     return <EventDetail data={data} setData={setData} eventName={selectedEvent} onBack={() => setSelectedEvent(null)} />;
   }
 
+  const addEvent = (name, date) => {
+    setData((d) => {
+      const existing = d.profile.events || [];
+      const alreadyExists = existing.some((e) => e.toLowerCase() === name.toLowerCase());
+      return {
+        ...d,
+        profile: { ...d.profile, events: alreadyExists ? existing : [...existing, name] },
+        eventDates: date ? { ...d.eventDates, [name]: date } : d.eventDates,
+      };
+    });
+    setShowAddForm(false);
+  };
+
   return (
     <div>
-      <PageHeader title="Events" sub="Every event on your calendar, with its own checklist and spends." />
+      <div className="px-6 sm:px-10 pt-8 sm:pt-10 pb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 style={{ ...serif, color: T.ink }} className="text-3xl mb-1">Events</h1>
+          <p style={{ color: T.inkSoft }} className="text-sm">Every event on your calendar, with its own checklist and spends.</p>
+        </div>
+        {events.length > 0 && !showAddForm && (
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="flex items-center gap-1 text-sm px-4 py-2 rounded-full text-white flex-shrink-0"
+            style={{ background: T.wine }}
+          >
+            <Plus size={14} /> Add event
+          </button>
+        )}
+      </div>
       <div className="px-6 sm:px-10 pb-16">
         {events.length === 0 ? (
-          <p className="text-sm" style={{ color: T.inkSoft }}>No events yet — the events you picked during onboarding will show up here.</p>
+          showAddForm ? (
+            <AddEventForm onSave={addEvent} onCancel={() => setShowAddForm(false)} />
+          ) : (
+            <div className="rounded-2xl border p-10 flex flex-col items-center text-center" style={{ borderColor: T.line, background: T.paper }}>
+              <span style={{ ...serif, color: T.ink }} className="text-xl mb-2">No events yet</span>
+              <p className="text-sm italic mb-6" style={{ color: T.inkSoft }}>The events you picked during onboarding will show up here.</p>
+              <button
+                onClick={() => setShowAddForm(true)}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-full text-white text-sm"
+                style={{ background: T.wine }}
+              >
+                <Plus size={14} /> Add event
+              </button>
+            </div>
+          )
         ) : (
           <div className="grid sm:grid-cols-2 gap-4">
+            {showAddForm && (
+              <div className="sm:col-span-2">
+                <AddEventForm onSave={addEvent} onCancel={() => setShowAddForm(false)} />
+              </div>
+            )}
             {events.map((ev) => (
               <EventCard key={ev} data={data} eventName={ev} onOpen={() => setSelectedEvent(ev)} />
             ))}

@@ -504,13 +504,17 @@ function Landing({ onStart, onSignIn }) {
 /* Onboarding                                                         */
 /* ---------------------------------------------------------------- */
 const INTEREST_OPTIONS = ["Shopping", "Beauty", "Fitness", "Wellness", "Budget", "Outfits", "Jewellery", "Wedding admin"];
+const EVENT_OPTIONS = ["Engagement", "Sangeet", "Mehendi", "Haldi", "Varmala", "Reception"];
 
 function Onboarding({ onComplete }) {
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({
-    name: "", weddingDate: "", city: "", interests: [],
+    name: "", weddingDate: "", city: "", events: [], interests: [],
   });
-  const steps = ["Your name", "Wedding date", "City", "Focus"];
+  const [customEvents, setCustomEvents] = useState([]);
+  const [addingEvent, setAddingEvent] = useState(false);
+  const [newEvent, setNewEvent] = useState("");
+  const steps = ["Your name", "Wedding date", "City", "Events", "Focus"];
 
   const toggleInterest = (i) =>
     setForm((f) => ({
@@ -520,10 +524,29 @@ function Onboarding({ onComplete }) {
         : [...f.interests, i],
     }));
 
+  const toggleEvent = (ev) =>
+    setForm((f) => ({
+      ...f,
+      events: f.events.includes(ev)
+        ? f.events.filter((x) => x !== ev)
+        : [...f.events, ev],
+    }));
+
+  const submitCustomEvent = () => {
+    const trimmed = newEvent.trim();
+    if (trimmed) {
+      setCustomEvents((c) => (c.includes(trimmed) ? c : [...c, trimmed]));
+      setForm((f) => (f.events.includes(trimmed) ? f : { ...f, events: [...f.events, trimmed] }));
+    }
+    setNewEvent("");
+    setAddingEvent(false);
+  };
+
   const canNext = [
     form.name.trim().length > 0,
     !!form.weddingDate,
     form.city.trim().length > 0,
+    form.events.length > 0,
     form.interests.length > 0,
   ][step];
 
@@ -580,6 +603,54 @@ function Onboarding({ onComplete }) {
             </div>
           )}
           {step === 3 && (
+            <div>
+              <h2 style={{ ...serif, color: T.ink }} className="text-2xl mb-2">What all events are you looking forward to?</h2>
+              <p style={{ color: T.inkSoft }} className="text-sm mb-8">Pick as many as you like, or add your own.</p>
+              <div className="flex flex-wrap gap-2">
+                {[...EVENT_OPTIONS, ...customEvents].map((ev) => {
+                  const active = form.events.includes(ev);
+                  return (
+                    <button
+                      key={ev}
+                      onClick={() => toggleEvent(ev)}
+                      className="px-4 py-2 rounded-full text-sm border transition-colors"
+                      style={{
+                        borderColor: active ? T.wine : T.line,
+                        background: active ? T.wine : "white",
+                        color: active ? "white" : T.ink,
+                      }}
+                    >
+                      {ev}
+                    </button>
+                  );
+                })}
+                {addingEvent ? (
+                  <input
+                    autoFocus
+                    value={newEvent}
+                    onChange={(e) => setNewEvent(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") submitCustomEvent();
+                      if (e.key === "Escape") { setNewEvent(""); setAddingEvent(false); }
+                    }}
+                    onBlur={submitCustomEvent}
+                    placeholder="Event name"
+                    className="px-4 py-2 rounded-full text-sm border outline-none focus:ring-2 w-36"
+                    style={{ borderColor: T.wine, background: "white", color: T.ink }}
+                  />
+                ) : (
+                  <button
+                    onClick={() => setAddingEvent(true)}
+                    className="px-4 py-2 rounded-full text-sm border transition-colors flex items-center gap-1"
+                    style={{ borderColor: T.line, background: "white", color: T.ink }}
+                  >
+                    <Plus size={14} /> Add
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+          {step === 4 && (
             <div>
               <h2 style={{ ...serif, color: T.ink }} className="text-2xl mb-2">What do you want help with?</h2>
               <p style={{ color: T.inkSoft }} className="text-sm mb-8">Pick as many as you like.</p>
@@ -1688,6 +1759,7 @@ export default function App() {
       name: form.name.trim(),
       weddingDate: form.weddingDate,
       city: form.city.trim(),
+      events: form.events,
       interests: form.interests,
     };
     const fresh = emptyData(profile);

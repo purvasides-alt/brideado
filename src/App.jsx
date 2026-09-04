@@ -131,27 +131,15 @@ function emptyData(profile) {
 }
 
 /* ---------------------------------------------------------------- */
-/* Storage (Supabase, keyed by a per-browser device id)              */
+/* Storage (Supabase, keyed by the logged-in user's id)               */
 /* ---------------------------------------------------------------- */
-const DEVICE_KEY = "brideops_device_id";
-
-function getDeviceId() {
-  let id = localStorage.getItem(DEVICE_KEY);
-  if (!id) {
-    id = crypto.randomUUID();
-    localStorage.setItem(DEVICE_KEY, id);
-  }
-  return id;
-}
-
-async function loadData() {
-  if (!supabase) return null;
+async function loadData(userId) {
+  if (!supabase || !userId) return null;
   try {
-    const id = getDeviceId();
     const { data, error } = await supabase
       .from("brideops_data")
       .select("data")
-      .eq("id", id)
+      .eq("id", userId)
       .maybeSingle();
     if (error || !data) return null;
     return data.data;
@@ -160,13 +148,12 @@ async function loadData() {
   }
 }
 
-async function saveData(data) {
-  if (!supabase) return;
+async function saveData(userId, data) {
+  if (!supabase || !userId) return;
   try {
-    const id = getDeviceId();
     await supabase
       .from("brideops_data")
-      .upsert({ id, data, updated_at: new Date().toISOString() });
+      .upsert({ id: userId, data, updated_at: new Date().toISOString() });
   } catch {
     /* ignore — local state still works, it just won't persist */
   }
@@ -446,14 +433,14 @@ function PhotoGallery({ photos = [], onAdd, onRemove, placeholder }) {
 /* ---------------------------------------------------------------- */
 /* Landing                                                            */
 /* ---------------------------------------------------------------- */
-function Landing({ onStart }) {
+function Landing({ onStart, onSignIn }) {
   return (
     <div style={{ background: T.paper, minHeight: "100%", ...sans }} className="w-full">
       <div className="max-w-5xl mx-auto px-6 pt-10 pb-24">
         <div className="flex items-center justify-between mb-20">
           <span style={{ ...serif, color: T.ink }} className="text-lg tracking-tight">BrideOps</span>
           <button
-            onClick={onStart}
+            onClick={onSignIn}
             className="text-sm px-4 py-2 rounded-full border transition-colors"
             style={{ borderColor: T.ink, color: T.ink }}
           >
@@ -656,7 +643,7 @@ const NAV = [
   { key: "vault", label: "Vault", icon: Archive },
 ];
 
-function Shell({ view, setView, children, name, daysToGo }) {
+function Shell({ view, setView, children, name, daysToGo, onSignOut }) {
   return (
     <div style={{ background: T.paperDim, minHeight: "100%", ...sans }} className="w-full flex flex-col sm:flex-row">
       {/* Desktop rail */}
@@ -684,9 +671,25 @@ function Shell({ view, setView, children, name, daysToGo }) {
           ))}
         </nav>
         <div className="px-3 py-3 rounded-lg" style={{ background: T.paperDim }}>
-          <div className="text-xs" style={{ color: T.inkSoft }}>{name}</div>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs" style={{ color: T.inkSoft }}>{name}</span>
+            <button onClick={onSignOut} className="text-[10px] underline underline-offset-2" style={{ color: T.inkSoft }}>
+              Sign out
+            </button>
+          </div>
           <div style={{ ...serif, color: T.ink }} className="text-xl">{daysToGo}<span className="text-xs ml-1" style={{...sans, color: T.inkSoft}}>days to go</span></div>
         </div>
+      </div>
+
+      {/* Mobile top bar */}
+      <div
+        className="sm:hidden flex items-center justify-between px-5 py-4 border-b"
+        style={{ background: T.paper, borderColor: T.line }}
+      >
+        <span style={{ ...serif, color: T.ink }} className="text-lg">BrideOps</span>
+        <button onClick={onSignOut} className="text-xs underline underline-offset-2" style={{ color: T.inkSoft }}>
+          Sign out
+        </button>
       </div>
 
       {/* Content */}
@@ -1536,32 +1539,149 @@ function Vault({ data, setData }) {
 }
 
 /* ---------------------------------------------------------------- */
+/* Auth                                                               */
+/* ---------------------------------------------------------------- */
+function AuthScreen({ initialMode = "signup", onAuthed, onBack }) {
+  const [mode, setMode] = useState(initialMode); // "signup" | "login"
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  const submit = async () => {
+    if (!supabase) {
+      setError("Storage isn't configured yet — check back once that's set up.");
+      return;
+    }
+    if (!email.trim() || password.length < 6) {
+      setError("Enter your email and a password of at least 6 characters.");
+      return;
+    }
+    setError("");
+    setNotice("");
+    setLoading(true);
+    try {
+      if (mode === "signup") {
+        const { data, error: err } = await supabase.auth.signUp({ email: email.trim(), password });
+        if (err) throw err;
+        if (data.session) {
+          onAuthed(data.session);
+        } else {
+          setNotice("Check your email to confirm your account, then come back and sign in.");
+        }
+      } else {
+        const { data, error: err } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+        if (err) throw err;
+        onAuthed(data.session);
+      }
+    } catch (e) {
+      setError(e.message || "Something went wrong — try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ background: T.paper, minHeight: "100%", ...sans }} className="w-full flex flex-col">
+      <div className="max-w-md mx-auto w-full px-6 pt-12 pb-24 flex-1 flex flex-col">
+        <button onClick={onBack} className="flex items-center gap-1 text-sm mb-10 self-start" style={{ color: T.inkSoft }}>
+          <ChevronLeft size={16} /> Back
+        </button>
+
+        <h2 style={{ ...serif, color: T.ink }} className="text-2xl mb-1">
+          {mode === "signup" ? "Create your BrideOps account" : "Welcome back"}
+        </h2>
+        <p style={{ color: T.inkSoft }} className="text-sm mb-8">
+          {mode === "signup" ? "So your plan follows you across your phone and laptop." : "Sign in to pick up where you left off."}
+        </p>
+
+        <div className="flex flex-col gap-3 mb-2">
+          <input
+            type="email" autoFocus value={email} onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@email.com"
+            className="w-full text-base px-4 py-3 rounded-xl border outline-none focus:ring-2"
+            style={{ borderColor: T.line, background: "white" }}
+          />
+          <input
+            type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+            placeholder={mode === "signup" ? "Create a password (6+ characters)" : "Password"}
+            onKeyDown={(e) => e.key === "Enter" && submit()}
+            className="w-full text-base px-4 py-3 rounded-xl border outline-none focus:ring-2"
+            style={{ borderColor: T.line, background: "white" }}
+          />
+        </div>
+
+        {error && <p className="text-xs mt-2" style={{ color: "#B4453D" }}>{error}</p>}
+        {notice && <p className="text-xs mt-2" style={{ color: T.moss }}>{notice}</p>}
+
+        <button
+          onClick={submit}
+          disabled={loading}
+          className="mt-6 flex items-center justify-center gap-2 px-5 py-3 rounded-full text-white text-sm disabled:opacity-50"
+          style={{ background: T.wine }}
+        >
+          {loading ? <Loader2 size={14} className="animate-spin" /> : (mode === "signup" ? "Create account" : "Sign in")}
+        </button>
+
+        <button
+          onClick={() => { setMode(mode === "signup" ? "login" : "signup"); setError(""); setNotice(""); }}
+          className="text-xs underline underline-offset-4 mt-6 self-center"
+          style={{ color: T.inkSoft }}
+        >
+          {mode === "signup" ? "Already have an account? Sign in" : "New here? Create an account"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- */
 /* App                                                                */
 /* ---------------------------------------------------------------- */
 export default function App() {
   const [loading, setLoading] = useState(true);
-  const [phase, setPhase] = useState("landing"); // landing | onboarding | app
+  const [phase, setPhase] = useState("landing"); // landing | auth | onboarding | app
+  const [authMode, setAuthMode] = useState("signup");
+  const [session, setSession] = useState(null);
   const [view, setView] = useState("dashboard");
   const [data, setDataRaw] = useState(null);
 
   useEffect(() => {
     (async () => {
-      const saved = await loadData();
-      if (saved && saved.profile) {
-        setDataRaw(saved);
-        setPhase("app");
+      if (!supabase) { setLoading(false); return; }
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData.session) {
+        await hydrateFromSession(sessionData.session);
       }
       setLoading(false);
     })();
+
+    if (!supabase) return;
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+    });
+    return () => sub.subscription.unsubscribe();
   }, []);
+
+  const hydrateFromSession = async (sess) => {
+    setSession(sess);
+    const saved = await loadData(sess.user.id);
+    if (saved && saved.profile) {
+      setDataRaw(saved);
+      setPhase("app");
+    } else {
+      setPhase("onboarding");
+    }
+  };
 
   const setData = useCallback((updater) => {
     setDataRaw((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
-      saveData(next);
+      if (session) saveData(session.user.id, next);
       return next;
     });
-  }, []);
+  }, [session]);
 
   const handleOnboardingComplete = (form) => {
     const profile = {
@@ -1572,8 +1692,15 @@ export default function App() {
     };
     const fresh = emptyData(profile);
     setDataRaw(fresh);
-    saveData(fresh);
+    if (session) saveData(session.user.id, fresh);
     setPhase("app");
+  };
+
+  const handleSignOut = async () => {
+    if (supabase) await supabase.auth.signOut();
+    setSession(null);
+    setDataRaw(null);
+    setPhase("landing");
   };
 
   const daysToGo = data ? Math.max(0, daysBetween(new Date(data.profile.weddingDate), new Date())) : 0;
@@ -1586,11 +1713,27 @@ export default function App() {
     );
   }
 
-  if (phase === "landing") return <Landing onStart={() => setPhase("onboarding")} />;
+  if (phase === "landing") {
+    return (
+      <Landing
+        onStart={() => { setAuthMode("signup"); setPhase("auth"); }}
+        onSignIn={() => { setAuthMode("login"); setPhase("auth"); }}
+      />
+    );
+  }
+  if (phase === "auth") {
+    return (
+      <AuthScreen
+        initialMode={authMode}
+        onBack={() => setPhase("landing")}
+        onAuthed={(sess) => hydrateFromSession(sess)}
+      />
+    );
+  }
   if (phase === "onboarding") return <Onboarding onComplete={handleOnboardingComplete} />;
 
   return (
-    <Shell view={view} setView={setView} name={data.profile.name} daysToGo={daysToGo}>
+    <Shell view={view} setView={setView} name={data.profile.name} daysToGo={daysToGo} onSignOut={handleSignOut}>
       {view === "dashboard" && <Dashboard data={data} setData={setData} daysToGo={daysToGo} />}
       {view === "timeline" && <Timeline data={data} setData={setData} />}
       {view === "money" && <Money data={data} setData={setData} />}

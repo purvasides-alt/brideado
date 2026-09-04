@@ -438,7 +438,7 @@ function Landing({ onStart, onSignIn }) {
     <div style={{ background: T.paper, minHeight: "100%", ...sans }} className="w-full">
       <div className="max-w-5xl mx-auto px-6 pt-10 pb-24">
         <div className="flex items-center justify-between mb-20">
-          <span style={{ ...serif, color: T.ink }} className="text-lg tracking-tight">BrideOps</span>
+          <span style={{ ...serif, color: T.ink }} className="text-lg tracking-tight">Bride-a-do</span>
           <button
             onClick={onSignIn}
             className="text-sm px-4 py-2 rounded-full border transition-colors"
@@ -460,7 +460,7 @@ function Landing({ onStart, onSignIn }) {
             The operating system for your bridal era.
           </h1>
           <p style={{ color: T.inkSoft }} className="text-lg leading-relaxed mb-10 max-w-lg">
-            A wedding is one day. Being a bride is a months-long project. BrideOps
+            A wedding is one day. Being a bride is a months-long project. Bride-a-do
             brings your timeline, budget, shopping, outfits, jewellery and prep
             into one place — instead of ten apps and a spreadsheet.
           </p>
@@ -470,7 +470,7 @@ function Landing({ onStart, onSignIn }) {
               className="flex items-center gap-2 px-6 py-3 rounded-full text-white transition-transform hover:-translate-y-0.5"
               style={{ background: T.wine }}
             >
-              Build my BrideOps <ArrowRight size={16} />
+              Build my Bride-a-do <ArrowRight size={16} />
             </button>
             <button className="text-sm underline underline-offset-4" style={{ color: T.ink }}>
               See how it works
@@ -623,7 +623,7 @@ function Onboarding({ onComplete }) {
             className="flex items-center gap-2 px-5 py-2.5 rounded-full text-white text-sm disabled:opacity-30 transition-opacity"
             style={{ background: T.wine }}
           >
-            {step < steps.length - 1 ? "Continue" : "Build my BrideOps"} <ArrowRight size={14} />
+            {step < steps.length - 1 ? "Continue" : "Build my Bride-a-do"} <ArrowRight size={14} />
           </button>
         </div>
       </div>
@@ -652,7 +652,7 @@ function Shell({ view, setView, children, name, daysToGo, onSignOut }) {
         style={{ borderColor: T.line, background: T.paper }}
       >
         <div className="flex items-center gap-2 px-2 mb-8">
-          <span style={{ ...serif, color: T.ink }} className="text-lg">BrideOps</span>
+          <span style={{ ...serif, color: T.ink }} className="text-lg">Bride-a-do</span>
         </div>
         <nav className="flex-1 flex flex-col gap-1">
           {NAV.map((n) => (
@@ -686,7 +686,7 @@ function Shell({ view, setView, children, name, daysToGo, onSignOut }) {
         className="sm:hidden flex items-center justify-between px-5 py-4 border-b"
         style={{ background: T.paper, borderColor: T.line }}
       >
-        <span style={{ ...serif, color: T.ink }} className="text-lg">BrideOps</span>
+        <span style={{ ...serif, color: T.ink }} className="text-lg">Bride-a-do</span>
         <button onClick={onSignOut} className="text-xs underline underline-offset-2" style={{ color: T.inkSoft }}>
           Sign out
         </button>
@@ -775,9 +775,9 @@ function Dashboard({ data, setData, daysToGo }) {
           </div>
         </div>
 
-        {/* Your BrideOps stats */}
+        {/* Your Bride-a-do stats */}
         <div className="rounded-2xl p-6 border flex flex-col gap-5" style={{ background: T.paper, borderColor: T.line }}>
-          <div className="text-xs tracking-wide" style={{ color: T.inkSoft }}>Your BrideOps</div>
+          <div className="text-xs tracking-wide" style={{ color: T.inkSoft }}>Your Bride-a-do</div>
           <div>
             <div className="flex justify-between text-sm mb-1.5">
               <span style={{ color: T.ink }}>{INR(spent)}</span>
@@ -1590,7 +1590,7 @@ function AuthScreen({ initialMode = "signup", onAuthed, onBack }) {
         </button>
 
         <h2 style={{ ...serif, color: T.ink }} className="text-2xl mb-1">
-          {mode === "signup" ? "Create your BrideOps account" : "Welcome back"}
+          {mode === "signup" ? "Create your Bride-a-do account" : "Welcome back"}
         </h2>
         <p style={{ color: T.inkSoft }} className="text-sm mb-8">
           {mode === "signup" ? "So your plan follows you across your phone and laptop." : "Sign in to pick up where you left off."}

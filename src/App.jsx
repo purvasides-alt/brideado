@@ -4,8 +4,8 @@ import { supabase } from "./supabaseClient.js";
 import {
   Sparkles, ArrowRight, Calendar, Wallet, MapPin, Heart, Archive,
   Check, Plus, X, ShoppingBag, Gem, Shirt, FileText, Dumbbell,
-  Droplet, Scissors, ChevronRight, ChevronLeft, LayoutGrid, Trash2,
-  Loader2, CircleDot, Images, Pin, PartyPopper,
+  Scissors, ChevronRight, ChevronLeft, LayoutGrid, Trash2,
+  Loader2, CircleDot, Images, Pin, PartyPopper, HeartPulse, Salad,
 } from "lucide-react";
 
 /* ---------------------------------------------------------------- */
@@ -114,22 +114,37 @@ function emptyData(profile) {
     tasks: buildTasks(profile.weddingDate),
     expenses: [],
     places: [],
-    photos: { actual: [], inspo: [] },
     budgetByCategory: {},
     budgetByEvent: {},
     eventChecklists: {},
     eventDates: {},
-    beautyTasks: [
-      { id: uid(), group: "Skin", title: "Book a starter facial", done: false },
-      { id: uid(), group: "Hair", title: "Trial haircut + colour consult", done: false },
-      { id: uid(), group: "Nails", title: "Pick a nail look reference", done: false },
-      { id: uid(), group: "Makeup", title: "Shortlist 3 makeup artists", done: false },
-    ],
+    wellnessChecklists: {
+      Wellness: [
+        { id: uid(), title: "Baseline health check-in", done: false },
+        { id: uid(), title: "Set a sleep routine", done: false },
+        { id: uid(), title: "Plan stress-relief time before the wedding", done: false },
+      ],
+      Nutrition: [
+        { id: uid(), title: "Meet a nutritionist, if you want one", done: false },
+        { id: uid(), title: "Set a daily water goal", done: false },
+      ],
+      Beauty: [
+        { id: uid(), title: "Book a starter facial", done: false },
+        { id: uid(), title: "Trial haircut + colour consult", done: false },
+        { id: uid(), title: "Pick a nail look reference", done: false },
+        { id: uid(), title: "Shortlist 3 makeup artists", done: false },
+      ],
+    },
     habits: [
       { id: uid(), title: "Workout", target: 3, unit: "sessions/week", log: [] },
       { id: uid(), title: "Walk 8,000 steps", target: 7, unit: "days/week", log: [] },
       { id: uid(), title: "Amla", target: 2, unit: "times/week", log: [] },
     ],
+    vaults: {
+      outfits: { inspo: [], actual: [] },
+      jewellery: { inspo: [], actual: [] },
+      hairMakeupNails: { inspo: [], actual: [] },
+    },
   };
 }
 
@@ -823,7 +838,8 @@ function PageHeader({ title, sub }) {
 /* Dashboard                                                          */
 /* ---------------------------------------------------------------- */
 function Dashboard({ data, setData, daysToGo }) {
-  const { profile, tasks, expenses, beautyTasks, habits } = data;
+  const { profile, tasks, expenses, habits } = data;
+  const beautyTasks = data.wellnessChecklists?.Beauty || [];
 
   const upcoming = useMemo(() => {
     const today = new Date();
@@ -1826,52 +1842,222 @@ function Shopping({ data, setData }) {
 /* ---------------------------------------------------------------- */
 /* My Bride (beauty / fitness / wellness / habits)                   */
 /* ---------------------------------------------------------------- */
-const BEAUTY_GROUPS = ["Skin", "Hair", "Nails", "Makeup"];
-const GROUP_ICON = { Skin: Droplet, Hair: Scissors, Nails: Sparkles, Makeup: Heart };
+const WELLNESS_CATEGORIES = [
+  { key: "Wellness", icon: HeartPulse },
+  { key: "Nutrition", icon: Salad },
+  { key: "Beauty", icon: Sparkles },
+];
+
+const VAULT_SECTIONS = [
+  { key: "outfits", label: "Outfit Vault", icon: Shirt },
+  { key: "jewellery", label: "Jewellery Log", icon: Gem },
+  { key: "hairMakeupNails", label: "Hair, Makeup & Nails", icon: Scissors },
+];
+
+function ChecklistCompletionDonut({ done, total }) {
+  const remaining = Math.max(0, total - done);
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const data = total > 0 ? [{ name: "Done", value: done }, { name: "Remaining", value: remaining || 0.0001 }] : [{ name: "Empty", value: 1 }];
+
+  return (
+    <div style={{ width: 96, height: 96, position: "relative" }} className="flex-shrink-0">
+      <ResponsiveContainer width="100%" height="100%">
+        <PieChart>
+          <Pie data={data} dataKey="value" innerRadius={30} outerRadius={46} paddingAngle={total > 0 ? 2 : 0} stroke="none">
+            {total > 0 ? (
+              <>
+                <Cell fill={T.moss} />
+                <Cell fill={T.line} />
+              </>
+            ) : (
+              <Cell fill={T.line} />
+            )}
+          </Pie>
+        </PieChart>
+      </ResponsiveContainer>
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <span className="text-xs font-medium" style={{ color: T.ink }}>{total > 0 ? `${pct}%` : "—"}</span>
+      </div>
+    </div>
+  );
+}
+
+function WellnessCard({ data, category, icon: Icon, onOpen }) {
+  const checklist = data.wellnessChecklists?.[category] || [];
+  const pending = checklist.filter((t) => !t.done);
+  const done = checklist.length - pending.length;
+
+  return (
+    <button
+      onClick={onOpen}
+      className="rounded-2xl border p-5 text-left transition-shadow hover:shadow-sm"
+      style={{ borderColor: T.line, background: T.paper }}
+    >
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2 min-w-0">
+          <Icon size={15} style={{ color: T.wine }} className="flex-shrink-0" />
+          <span style={{ ...serif, color: T.ink }} className="text-lg truncate">{category}</span>
+        </div>
+        <ChevronRight size={16} style={{ color: T.inkSoft }} className="flex-shrink-0" />
+      </div>
+      <div className="flex items-center gap-4">
+        <ChecklistCompletionDonut done={done} total={checklist.length} />
+        <div className="flex-1 min-w-0">
+          <div className="text-xs tracking-wide mb-2" style={{ color: T.inkSoft }}>To be ticked-off</div>
+          {pending.length === 0 ? (
+            <p className="text-xs" style={{ color: T.inkSoft }}>Nothing pending — all done.</p>
+          ) : (
+            <div className="flex flex-col gap-1">
+              {pending.slice(0, 4).map((t) => (
+                <div key={t.id} className="text-xs truncate" style={{ color: T.ink }}>· {t.title}</div>
+              ))}
+              {pending.length > 4 && (
+                <div className="text-xs" style={{ color: T.inkSoft }}>+{pending.length - 4} more</div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function WellnessDetail({ data, setData, category, onBack }) {
+  const [addingTask, setAddingTask] = useState(false);
+  const [newTask, setNewTask] = useState("");
+
+  const checklist = data.wellnessChecklists?.[category] || [];
+  const pending = checklist.filter((t) => !t.done);
+  const done = checklist.filter((t) => t.done);
+
+  const toggleTask = (id) => setData((d) => ({
+    ...d,
+    wellnessChecklists: {
+      ...d.wellnessChecklists,
+      [category]: (d.wellnessChecklists?.[category] || []).map((t) => (t.id === id ? { ...t, done: !t.done } : t)),
+    },
+  }));
+
+  const submitTask = () => {
+    const title = newTask.trim();
+    if (title) {
+      setData((d) => ({
+        ...d,
+        wellnessChecklists: {
+          ...d.wellnessChecklists,
+          [category]: [...(d.wellnessChecklists?.[category] || []), { id: uid(), title, done: false }],
+        },
+      }));
+    }
+    setNewTask("");
+    setAddingTask(false);
+  };
+
+  return (
+    <div>
+      <div className="px-6 sm:px-10 pt-8 sm:pt-10 pb-2">
+        <button onClick={onBack} className="flex items-center gap-1 text-sm mb-4" style={{ color: T.inkSoft }}>
+          <ChevronLeft size={16} /> My Bride
+        </button>
+        <h1 style={{ ...serif, color: T.ink }} className="text-3xl mb-1">{category}</h1>
+      </div>
+
+      <div className="px-6 sm:px-10 pb-16 grid sm:grid-cols-2 gap-6">
+        <div className="rounded-2xl p-6 border" style={{ background: T.paper, borderColor: T.line }}>
+          <div className="text-xs tracking-wide mb-4" style={{ color: T.inkSoft }}>Bride-a-do</div>
+          <div className="flex flex-col gap-2 mb-4">
+            {pending.length === 0 && <p className="text-sm" style={{ color: T.inkSoft }}>Nothing left to do here.</p>}
+            {pending.map((t) => (
+              <button key={t.id} onClick={() => toggleTask(t.id)} className="flex items-center gap-2 text-left">
+                <span className="w-3.5 h-3.5 rounded-full border flex-shrink-0 flex items-center justify-center" style={{ borderColor: T.inkSoft, background: "transparent" }} />
+                <span className="text-sm" style={{ color: T.ink }}>{t.title}</span>
+              </button>
+            ))}
+          </div>
+          {addingTask ? (
+            <input
+              autoFocus
+              value={newTask}
+              onChange={(e) => setNewTask(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") submitTask();
+                if (e.key === "Escape") { setNewTask(""); setAddingTask(false); }
+              }}
+              onBlur={submitTask}
+              placeholder="New a-do"
+              className="w-full px-3 py-2 rounded-lg border text-sm outline-none focus:ring-2"
+              style={{ borderColor: T.wine }}
+            />
+          ) : (
+            <button onClick={() => setAddingTask(true)} className="flex items-center gap-1 text-sm" style={{ color: T.wine }}>
+              <Plus size={14} /> Add a-do
+            </button>
+          )}
+        </div>
+
+        <div className="rounded-2xl p-6 border" style={{ background: T.paper, borderColor: T.line }}>
+          <div className="text-xs tracking-wide mb-4" style={{ color: T.inkSoft }}>Bride-a-done</div>
+          {done.length === 0 && <p className="text-sm" style={{ color: T.inkSoft }}>Nothing ticked off yet.</p>}
+          <div className="flex flex-col gap-2">
+            {done.map((t) => (
+              <button key={t.id} onClick={() => toggleTask(t.id)} className="flex items-center gap-2 text-left">
+                <span className="w-3.5 h-3.5 rounded-full border flex-shrink-0 flex items-center justify-center" style={{ borderColor: T.moss, background: T.moss }}>
+                  <Check size={9} color="white" />
+                </span>
+                <span className="text-sm" style={{ color: T.inkSoft, textDecoration: "line-through" }}>{t.title}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function MyBride({ data, setData }) {
-  const toggleBeauty = (id) => setData((d) => ({ ...d, beautyTasks: d.beautyTasks.map((b) => b.id === id ? { ...b, done: !b.done } : b) }));
+  const [selectedCategory, setSelectedCategory] = useState(null);
+
   const logHabit = (id) => setData((d) => ({
     ...d,
     habits: d.habits.map((h) => h.id === id ? { ...h, log: [...h.log, new Date().toISOString()] } : h),
   }));
   const resetHabit = (id) => setData((d) => ({ ...d, habits: d.habits.map((h) => h.id === id ? { ...h, log: [] } : h) }));
-  const addPhoto = (bucket, photo) => setData((d) => ({
+
+  const addVaultPhoto = (vaultKey, bucket, photo) => setData((d) => ({
     ...d,
-    photos: { actual: d.photos?.actual || [], inspo: d.photos?.inspo || [], [bucket]: [...(d.photos?.[bucket] || []), photo] },
+    vaults: {
+      ...d.vaults,
+      [vaultKey]: {
+        inspo: d.vaults?.[vaultKey]?.inspo || [],
+        actual: d.vaults?.[vaultKey]?.actual || [],
+        [bucket]: [...(d.vaults?.[vaultKey]?.[bucket] || []), photo],
+      },
+    },
   }));
-  const removePhoto = (bucket, id) => setData((d) => ({
+  const removeVaultPhoto = (vaultKey, bucket, id) => setData((d) => ({
     ...d,
-    photos: { actual: d.photos?.actual || [], inspo: d.photos?.inspo || [], [bucket]: (d.photos?.[bucket] || []).filter((p) => p.id !== id) },
+    vaults: {
+      ...d.vaults,
+      [vaultKey]: {
+        inspo: d.vaults?.[vaultKey]?.inspo || [],
+        actual: d.vaults?.[vaultKey]?.actual || [],
+        [bucket]: (d.vaults?.[vaultKey]?.[bucket] || []).filter((p) => p.id !== id),
+      },
+    },
   }));
+
+  if (selectedCategory) {
+    return <WellnessDetail data={data} setData={setData} category={selectedCategory} onBack={() => setSelectedCategory(null)} />;
+  }
 
   return (
     <div>
-      <PageHeader title="My Bride" sub="Beauty, fitness and wellness — organisational, not medical." />
+      <PageHeader title="My Bride" sub="Beauty, wellness and nutrition — organisational, not medical." />
       <div className="px-6 sm:px-10 pb-16">
         <div className="grid sm:grid-cols-2 gap-4 mb-10">
-          {BEAUTY_GROUPS.map((g) => {
-            const Icon = GROUP_ICON[g];
-            const items = data.beautyTasks.filter((b) => b.group === g);
-            return (
-              <div key={g} className="rounded-2xl border p-5" style={{ borderColor: T.line, background: T.paper }}>
-                <div className="flex items-center gap-2 mb-3">
-                  <Icon size={15} style={{ color: T.wine }} />
-                  <span style={{ ...serif, color: T.ink }} className="text-base">{g}</span>
-                </div>
-                <div className="flex flex-col gap-2">
-                  {items.map((b) => (
-                    <button key={b.id} onClick={() => toggleBeauty(b.id)} className="flex items-center gap-2 text-left">
-                      <span className="w-3.5 h-3.5 rounded-full border flex-shrink-0 flex items-center justify-center" style={{ borderColor: b.done ? T.moss : T.inkSoft, background: b.done ? T.moss : "transparent" }}>
-                        {b.done && <Check size={9} color="white" />}
-                      </span>
-                      <span className="text-sm" style={{ color: b.done ? T.inkSoft : T.ink, textDecoration: b.done ? "line-through" : "none" }}>{b.title}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
+          {WELLNESS_CATEGORIES.map((c) => (
+            <WellnessCard key={c.key} data={data} category={c.key} icon={c.icon} onOpen={() => setSelectedCategory(c.key)} />
+          ))}
         </div>
 
         <div className="flex items-center gap-2 mb-3">
@@ -1879,7 +2065,7 @@ function MyBride({ data, setData }) {
           <div className="text-xs tracking-wide" style={{ color: T.inkSoft }}>Fitness & wellness habits</div>
         </div>
         <p className="text-xs mb-4" style={{ color: T.inkSoft }}>Feel strong and energetic for the day — not about weight loss.</p>
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3 mb-10">
           {data.habits.map((h) => (
             <div key={h.id} className="rounded-2xl border p-4 flex items-center justify-between" style={{ borderColor: T.line, background: T.paper }}>
               <div>
@@ -1896,34 +2082,44 @@ function MyBride({ data, setData }) {
           ))}
         </div>
 
-        <div className="flex items-center gap-2 mb-3 mt-10">
-          <Images size={15} style={{ color: T.wine }} />
-          <div className="text-xs tracking-wide" style={{ color: T.inkSoft }}>Pictures</div>
-        </div>
-
-        <div className="flex items-center gap-2 mb-2 mt-5">
-          <Pin size={13} style={{ color: T.inkSoft }} />
-          <span className="text-sm" style={{ ...serif, color: T.ink }}>Inspo</span>
-        </div>
-        <p className="text-xs mb-3" style={{ color: T.inkSoft }}>Anything you're drawing from — outfits, nails, hairstyles, anything at all.</p>
-        <PhotoGallery
-          photos={data.photos?.inspo || []}
-          onAdd={(p) => addPhoto("inspo", p)}
-          onRemove={(id) => removePhoto("inspo", id)}
-          placeholder="No inspo saved yet — screenshot something you love and add it here."
-        />
-
-        <div className="flex items-center gap-2 mb-2 mt-8">
-          <Images size={13} style={{ color: T.inkSoft }} />
-          <span className="text-sm" style={{ ...serif, color: T.ink }}>Actual</span>
-        </div>
-        <p className="text-xs mb-3" style={{ color: T.inkSoft }}>Trial photos and real results — how it actually turned out.</p>
-        <PhotoGallery
-          photos={data.photos?.actual || []}
-          onAdd={(p) => addPhoto("actual", p)}
-          onRemove={(id) => removePhoto("actual", id)}
-          placeholder="No trial or result photos yet."
-        />
+        {VAULT_SECTIONS.map((v) => {
+          const vault = data.vaults?.[v.key] || { inspo: [], actual: [] };
+          const Icon = v.icon;
+          return (
+            <div key={v.key} className="mb-10">
+              <div className="flex items-center gap-2 mb-4">
+                <Icon size={15} style={{ color: T.wine }} />
+                <span style={{ ...serif, color: T.ink }} className="text-lg">{v.label}</span>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-6">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Pin size={13} style={{ color: T.inkSoft }} />
+                    <span className="text-sm" style={{ ...serif, color: T.ink }}>Inspo</span>
+                  </div>
+                  <PhotoGallery
+                    photos={vault.inspo || []}
+                    onAdd={(p) => addVaultPhoto(v.key, "inspo", p)}
+                    onRemove={(id) => removeVaultPhoto(v.key, "inspo", id)}
+                    placeholder="No inspo saved yet — screenshot something you love and add it here."
+                  />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Images size={13} style={{ color: T.inkSoft }} />
+                    <span className="text-sm" style={{ ...serif, color: T.ink }}>Actual</span>
+                  </div>
+                  <PhotoGallery
+                    photos={vault.actual || []}
+                    onAdd={(p) => addVaultPhoto(v.key, "actual", p)}
+                    onRemove={(id) => removeVaultPhoto(v.key, "actual", id)}
+                    placeholder="No trial or result photos yet."
+                  />
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
